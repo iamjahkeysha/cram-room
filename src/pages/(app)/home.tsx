@@ -1,9 +1,15 @@
 ﻿import { useEffect, useMemo, useState } from 'react'
+import type { CSSProperties, ReactNode } from 'react'
 import { getAuthToken, useQuery } from 'deepspace'
+import { setLiveStatus } from '../../liveStatus'
 
 const QUESTION_SECONDS = 20
 const REVEAL_SECONDS = 6
-const COLORS = ['#4f46e5', '#db2777', '#059669', '#d97706', '#0891b2', '#7c3aed', '#dc2626', '#65a30d']
+const PLAYER_COLORS = ['#f472b6', '#60a5fa', '#34d399', '#fbbf24', '#a78bfa', '#fb923c', '#22d3ee', '#f87171']
+const CHOICE_COLORS = ['#e11d48', '#2563eb', '#ca8a04', '#16a34a']
+const LETTERS = ['A', 'B', 'C', 'D']
+const YELLOW = '#facc15'
+const INK = '#1e0b3a'
 
 type Reveal = { answerIndex: number; sourceQuote: string; explanation: string }
 type Room = {
@@ -47,19 +53,27 @@ function saveName(name: string) {
 function colorFor(userId: string): string {
   let h = 0
   for (let i = 0; i < userId.length; i++) h = (h * 31 + userId.charCodeAt(i)) >>> 0
-  return COLORS[h % COLORS.length]
+  return PLAYER_COLORS[h % PLAYER_COLORS.length]
 }
 
 const plain = (s: string) => s.replace(/\*\*|__|(?<!\w)[*_]|[*_](?!\w)/g, '')
 
+const groovy: CSSProperties = {
+  fontFamily: "'Shrikhand', cursive", color: YELLOW, fontWeight: 400,
+  textShadow: '2px 2px 0 #fb923c, 4px 4px 0 #f472b6, 6px 6px 0 #7c3aed',
+}
+
 const styles = {
-  page: { maxWidth: 720, margin: '0 auto', padding: '24px 16px 64px', fontFamily: 'system-ui, sans-serif' },
-  card: { border: '1px solid #8884', borderRadius: 12, padding: 16, marginTop: 16 },
-  input: { display: 'block', width: '100%', padding: 10, marginTop: 8, borderRadius: 8, border: '1px solid #8886', boxSizing: 'border-box' as const },
-  button: { padding: '10px 18px', borderRadius: 8, border: 'none', background: '#4f46e5', color: 'white', fontWeight: 600, cursor: 'pointer', marginTop: 12 },
-  ghost: { padding: '10px 18px', borderRadius: 8, border: '1px solid #8886', background: 'transparent', color: 'inherit', cursor: 'pointer', marginTop: 12 },
-  error: { color: '#dc2626', marginTop: 8 },
-  muted: { opacity: 0.7, fontSize: 14 },
+  backdrop: { minHeight: '100%', background: 'linear-gradient(160deg, #1e0b3a 0%, #3b0764 55%, #4c1d95 100%)', color: '#f5f3ff' },
+  page: { maxWidth: 720, margin: '0 auto', padding: '24px 16px 64px', fontFamily: 'system-ui, -apple-system, Segoe UI, sans-serif' },
+  card: { background: 'rgba(255,255,255,0.06)', border: '1px solid rgba(255,255,255,0.14)', borderRadius: 18, padding: 18, marginTop: 16, boxShadow: '0 10px 30px rgba(0,0,0,0.25)' },
+  input: { display: 'block', width: '100%', padding: 12, marginTop: 8, borderRadius: 10, border: '1px solid rgba(255,255,255,0.22)', background: 'rgba(255,255,255,0.08)', color: '#fff', fontSize: 16, boxSizing: 'border-box' as const },
+  button: { padding: '12px 22px', borderRadius: 12, border: 'none', background: YELLOW, color: INK, fontWeight: 800, fontSize: 16, cursor: 'pointer', marginTop: 14, boxShadow: '0 4px 0 #a16207' },
+  ghost: { padding: '10px 18px', borderRadius: 12, border: '1px solid rgba(255,255,255,0.3)', background: 'transparent', color: '#fff', fontWeight: 600, cursor: 'pointer', marginTop: 12 },
+  link: { background: 'none', border: 'none', color: YELLOW, textDecoration: 'underline', cursor: 'pointer', padding: 0, fontSize: 14, marginTop: 10 },
+  error: { color: '#fca5a5', marginTop: 8, fontWeight: 600 },
+  muted: { opacity: 0.75, fontSize: 14 },
+  h2: { marginTop: 0, fontWeight: 800 },
 }
 
 function useRoomParam() {
@@ -83,10 +97,12 @@ function useRoomParam() {
 export default function Home() {
   const [roomId, goToRoom] = useRoomParam()
   return (
-    <div style={styles.page}>
-      <h1 style={{ marginBottom: 0 }}>Cram Room</h1>
-      <p style={styles.muted}>Turn any article or notes into a live quiz, with every answer backed by the source.</p>
-      {roomId ? <NameGate onLeave={() => goToRoom('')}><RoomView code={roomId} onLeave={() => goToRoom('')} /></NameGate> : <StartScreen onEnter={goToRoom} />}
+    <div style={styles.backdrop}>
+      <div style={styles.page}>
+        {roomId
+          ? <NameGate onLeave={() => goToRoom('')}><RoomView code={roomId} onLeave={() => goToRoom('')} /></NameGate>
+          : <StartScreen onEnter={goToRoom} />}
+      </div>
     </div>
   )
 }
@@ -95,13 +111,16 @@ function StartScreen({ onEnter }: { onEnter: (id: string) => void }) {
   const [name, setName] = useState(readName)
   const [url, setUrl] = useState('')
   const [text, setText] = useState('')
+  const [useNotes, setUseNotes] = useState(false)
   const [code, setCode] = useState('')
   const [busy, setBusy] = useState(false)
   const [error, setError] = useState<string | null>(null)
 
+  const canCreate = !busy && (useNotes ? text.trim().length > 0 : url.trim().length > 0)
+
   async function create() {
     setBusy(true); setError(null); saveName(name)
-    const r = await callAction<{ roomId: string }>('createRoom', url.trim() ? { url: url.trim(), name } : { text, name })
+    const r = await callAction<{ roomId: string }>('createRoom', useNotes ? { text, name } : { url: url.trim(), name })
     setBusy(false)
     if (r.ok) onEnter(r.data.roomId)
     else setError(r.error)
@@ -115,31 +134,75 @@ function StartScreen({ onEnter }: { onEnter: (id: string) => void }) {
     else setError(r.error)
   }
 
+  const steps = [
+    { n: '1', text: 'Paste an article link or your notes' },
+    { n: '2', text: 'Friends join with a 6-letter code' },
+    { n: '3', text: 'Every answer is backed by a quote from the source' },
+  ]
+
   return (
     <>
+      <h1 style={{ fontSize: 'clamp(32px, 6vw, 48px)', fontWeight: 900, lineHeight: 1.15, margin: '12px 0 8px' }}>
+        <span style={{ ...groovy, display: 'block', textAlign: 'center', fontSize: 'clamp(38px, 8vw, 60px)', lineHeight: 1.05 }}>Study smarter,<br />together.</span>
+      </h1>
+      <p style={{ ...styles.muted, fontSize: 17, textAlign: 'center', maxWidth: 520, margin: '14px auto 0' }}>Your notes become a quiz show. Every answer comes with its source.</p>
+
       <div style={styles.card}>
-        <label>Your name
+        <label style={{ fontWeight: 700 }}>Your name
           <input style={styles.input} value={name} onChange={(e) => setName(e.target.value)} placeholder="e.g. Sam" maxLength={24} />
         </label>
-      </div>
 
-      <div style={styles.card}>
-        <h2 style={{ marginTop: 0 }}>Host a quiz</h2>
-        <input style={styles.input} value={url} onChange={(e) => setUrl(e.target.value)} placeholder="Article link (https://...)" />
-        <textarea style={styles.input} rows={5} value={text} onChange={(e) => setText(e.target.value)} placeholder="...or paste your notes (used when the link is empty)" />
-        <button style={styles.button} disabled={busy || (!url.trim() && !text.trim())} onClick={create}>
-          {busy ? 'Writing questions… (10–20s)' : 'Create room'}
+        <div style={{ marginTop: 14, fontWeight: 700 }}>{useNotes ? 'Your notes' : 'Article link'}</div>
+        {useNotes
+          ? <textarea style={styles.input} rows={6} value={text} onChange={(e) => setText(e.target.value)} placeholder="Paste a few paragraphs of notes…" />
+          : <input style={styles.input} value={url} onChange={(e) => setUrl(e.target.value)} placeholder="https://en.wikipedia.org/wiki/…" />}
+        <button style={styles.link} onClick={() => setUseNotes((v) => !v)}>
+          {useNotes ? 'Use an article link instead' : 'Or paste your notes instead'}
         </button>
-      </div>
+        <div>
+          <button style={styles.button} disabled={!canCreate} onClick={create}>
+            {busy ? 'Writing questions… (10–20s)' : 'Start a study session →'}
+          </button>
+        </div>
 
-      <div style={styles.card}>
-        <h2 style={{ marginTop: 0 }}>Join a quiz</h2>
-        <input style={styles.input} value={code} onChange={(e) => setCode(e.target.value.toUpperCase())} placeholder="Room code" maxLength={6} />
-        <button style={styles.ghost} disabled={busy || code.trim().length < 6} onClick={join}>Join room</button>
+        <div style={{ display: 'flex', alignItems: 'center', gap: 10, flexWrap: 'wrap', marginTop: 18, paddingTop: 16, borderTop: '1px solid rgba(255,255,255,0.12)' }}>
+          <span style={styles.muted}>Have a code?</span>
+          <input
+            style={{ ...styles.input, marginTop: 0, width: 150, letterSpacing: 4, fontWeight: 800, textTransform: 'uppercase' }}
+            value={code} onChange={(e) => setCode(e.target.value.toUpperCase())} placeholder="CODE" maxLength={6}
+          />
+          <button style={{ ...styles.ghost, marginTop: 0 }} disabled={busy || code.trim().length < 6} onClick={join}>Join game</button>
+        </div>
       </div>
 
       {error && <p style={styles.error}>{error}</p>}
+
+      <div style={{ display: 'grid', gridTemplateColumns: 'repeat(auto-fit, minmax(180px, 1fr))', gap: 12, marginTop: 20 }}>
+        {steps.map((s) => (
+          <div key={s.n} style={{ ...styles.card, marginTop: 0, padding: 16 }}>
+            <div style={{ ...groovy, fontSize: 30, lineHeight: 1 }}>{s.n}</div>
+            <div style={{ marginTop: 8, fontWeight: 600 }}>{s.text}</div>
+          </div>
+        ))}
+      </div>
     </>
+  )
+}
+
+// Shown when someone opens a room link before the app knows their name.
+function NameGate({ children, onLeave }: { children: ReactNode; onLeave: () => void }) {
+  const [ready, setReady] = useState(() => readName().trim().length > 0)
+  const [name, setName] = useState('')
+  if (ready) return <>{children}</>
+  return (
+    <div style={styles.card}>
+      <h2 style={styles.h2}>Join this quiz</h2>
+      <label style={{ fontWeight: 700 }}>Your name
+        <input style={styles.input} value={name} onChange={(e) => setName(e.target.value)} placeholder="e.g. Sam" maxLength={24} autoFocus />
+      </label>
+      <button style={styles.button} disabled={!name.trim()} onClick={() => { saveName(name.trim()); setReady(true) }}>Join</button>{' '}
+      <button style={styles.ghost} onClick={onLeave}>Cancel</button>
+    </div>
   )
 }
 
@@ -187,6 +250,18 @@ function RoomView({ code, onLeave }: { code: string; onLeave: () => void }) {
   const playerList = useMemo(() => players.records.map((p) => p.data), [players.records])
   const everyoneAnswered = playerList.length > 0 && playerList.every((p) => p.answeredIndex === index)
 
+  // Tell the navbar the room code and timer.
+  useEffect(() => {
+    if (!room) return
+    const secondsLeft = room.status === 'question'
+      ? Math.max(0, Math.ceil((room.questionStartedAt + QUESTION_SECONDS * 1000 - now) / 1000))
+      : room.status === 'reveal'
+        ? Math.max(0, Math.ceil((room.revealedAt + REVEAL_SECONDS * 1000 - now) / 1000))
+        : 0
+    setLiveStatus({ code, phase: room.status, secondsLeft })
+  }, [room, now, code])
+  useEffect(() => () => setLiveStatus(null), [])
+
   // Auto-advance: when time is up (or everyone answered), ask the server to move on.
   // The server checks its own clock, so early or repeated calls are harmless.
   const due = !!room && myId !== null && (
@@ -233,7 +308,7 @@ function RoomView({ code, onLeave }: { code: string; onLeave: () => void }) {
       <div style={{ ...styles.card, display: 'flex', justifyContent: 'space-between', alignItems: 'center', gap: 12, flexWrap: 'wrap' }}>
         <div>
           <div style={styles.muted}>Room code</div>
-          <div style={{ fontSize: 28, fontWeight: 700, letterSpacing: 4 }}>{code}</div>
+          <div style={{ fontSize: 34, fontWeight: 900, letterSpacing: 6, color: YELLOW }}>{code}</div>
           <div style={styles.muted}>Source: {room.sourceLabel}</div>
         </div>
         <button style={styles.ghost} onClick={onLeave}>Leave</button>
@@ -245,12 +320,12 @@ function RoomView({ code, onLeave }: { code: string; onLeave: () => void }) {
 
       {room.status === 'lobby' && (
         <div style={styles.card}>
-          <h2 style={{ marginTop: 0 }}>Waiting for players</h2>
+          <h2 style={styles.h2}>Waiting for players</h2>
           <p>Share this link, or have friends enter the code:</p>
           <input style={styles.input} readOnly value={shareLink} onFocus={(e) => e.currentTarget.select()} />
           <div style={{ display: 'flex', flexWrap: 'wrap', gap: 8, marginTop: 16 }}>
             {playerList.map((p) => (
-              <span key={p.userId} style={{ padding: '4px 10px', borderRadius: 999, background: colorFor(p.userId), color: 'white', fontWeight: 600 }}>
+              <span key={p.userId} style={{ padding: '6px 12px', borderRadius: 999, background: colorFor(p.userId), color: INK, fontWeight: 800 }}>
                 {p.name}
               </span>
             ))}
@@ -291,18 +366,18 @@ function Scoreboard({ players, myId, index, showAnswered }: { players: Player[];
   const top = Math.max(1, ...sorted.map((p) => p.score))
   return (
     <div style={styles.card}>
-      <div style={{ display: 'grid', gap: 8 }}>
-        {sorted.map((p) => {
+      <div style={{ display: 'grid', gap: 10 }}>
+        {sorted.map((p, rank) => {
           const pct = Math.max(3, Math.round((p.score / top) * 100))
           const answered = showAnswered && p.answeredIndex === index
           return (
             <div key={p.userId}>
-              <div style={{ display: 'flex', justifyContent: 'space-between', fontSize: 14, fontWeight: p.userId === myId ? 700 : 500 }}>
-                <span>{p.name}{p.userId === myId ? ' (you)' : ''} {answered ? '✓' : ''}</span>
-                <span>{p.score}</span>
+              <div style={{ display: 'flex', justifyContent: 'space-between', fontSize: 15, fontWeight: p.userId === myId ? 800 : 600 }}>
+                <span>{rank === 0 && p.score > 0 ? '👑 ' : ''}{p.name}{p.userId === myId ? ' (you)' : ''} {answered ? '✓' : ''}</span>
+                <span style={{ fontVariantNumeric: 'tabular-nums' }}>{p.score}</span>
               </div>
-              <div style={{ height: 12, borderRadius: 6, background: '#8882', overflow: 'hidden' }}>
-                <div style={{ width: `${pct}%`, height: '100%', background: colorFor(p.userId), transition: 'width 700ms ease' }} />
+              <div style={{ height: 14, borderRadius: 7, background: 'rgba(255,255,255,0.1)', overflow: 'hidden', marginTop: 4 }}>
+                <div style={{ width: `${pct}%`, height: '100%', background: colorFor(p.userId), borderRadius: 7, boxShadow: `0 0 12px ${colorFor(p.userId)}`, transition: 'width 800ms cubic-bezier(.2,.8,.2,1)' }} />
               </div>
             </div>
           )
@@ -331,44 +406,64 @@ function QuestionCard(props: {
   const chosen = myAnswer?.choice ?? picked
   const locked = chosen !== null || room.status !== 'question' || secondsLeft === 0
   const isLast = index + 1 >= room.questions.length
+  const urgent = room.status === 'question' && secondsLeft <= 5
 
   return (
     <div style={styles.card}>
-      <div style={{ display: 'flex', justifyContent: 'space-between', ...styles.muted }}>
-        <span>Question {index + 1} of {room.questions.length}</span>
+      <div style={{ display: 'flex', justifyContent: 'space-between', alignItems: 'center', gap: 12 }}>
+        <span style={styles.muted}>Question {index + 1} of {room.questions.length}</span>
         {room.status === 'question'
-          ? <span>{secondsLeft}s · {answeredCount}/{playerCount} answered</span>
-          : <span>{isLast ? 'Results' : 'Next question'} in {nextIn}s</span>}
+          ? (
+            <div style={{ display: 'flex', alignItems: 'center', gap: 10 }}>
+              <span style={styles.muted}>{answeredCount}/{playerCount} answered</span>
+              <div style={{
+                width: 52, height: 52, borderRadius: '50%', display: 'grid', placeItems: 'center',
+                fontSize: 22, fontWeight: 900, color: urgent ? '#fff' : INK,
+                background: urgent ? '#e11d48' : YELLOW, boxShadow: urgent ? '0 0 18px #e11d48' : 'none', transition: 'background 300ms',
+              }}>{secondsLeft}</div>
+            </div>
+          )
+          : <span style={styles.muted}>{isLast ? 'Results' : 'Next question'} in {nextIn}s</span>}
       </div>
-      <h2>{question.question}</h2>
-      <div style={{ display: 'grid', gap: 8 }}>
+      <h2 style={{ fontSize: 24, fontWeight: 800, lineHeight: 1.3 }}>{question.question}</h2>
+      <div style={{ display: 'grid', gridTemplateColumns: 'repeat(auto-fit, minmax(260px, 1fr))', gap: 10 }}>
         {question.choices.map((c, i) => {
-          const isCorrect = reveal && reveal.answerIndex === i
-          const isWrongPick = reveal && chosen === i && reveal.answerIndex !== i
+          const isCorrect = !!reveal && reveal.answerIndex === i
+          const isWrongPick = !!reveal && chosen === i && reveal.answerIndex !== i
+          const faded = (!!reveal && !isCorrect) || (!reveal && chosen !== null && chosen !== i)
           return (
             <button
               key={i}
               disabled={locked}
               onClick={() => { setPicked(i); onAnswer(i) }}
               style={{
-                textAlign: 'left', padding: 12, borderRadius: 8, cursor: locked ? 'default' : 'pointer',
-                border: chosen === i ? '2px solid #4f46e5' : '1px solid #8886',
-                background: isCorrect ? '#16a34a33' : isWrongPick ? '#dc262633' : 'transparent',
-                color: 'inherit', fontSize: 16,
+                display: 'flex', alignItems: 'center', gap: 12, textAlign: 'left',
+                padding: '14px 16px', borderRadius: 14, cursor: locked ? 'default' : 'pointer',
+                border: isWrongPick ? '3px solid #fca5a5' : chosen === i ? '3px solid #fff' : '3px solid transparent',
+                background: CHOICE_COLORS[i], color: '#fff', fontSize: 17, fontWeight: 700,
+                opacity: faded ? 0.35 : 1,
+                boxShadow: isCorrect ? `0 0 0 4px #fff, 0 0 24px ${CHOICE_COLORS[i]}` : '0 4px 0 rgba(0,0,0,0.3)',
+                transform: isCorrect ? 'scale(1.03)' : 'none', transition: 'opacity 300ms, transform 300ms',
               }}
             >
-              {c} {isCorrect ? '✓' : ''}
+              <span style={{ minWidth: 32, height: 32, borderRadius: 8, background: 'rgba(0,0,0,0.25)', display: 'grid', placeItems: 'center', fontWeight: 900 }}>
+                {LETTERS[i]}
+              </span>
+              <span style={{ flex: 1 }}>{c}</span>
+              {isCorrect && <span style={{ fontSize: 22 }}>✓</span>}
             </button>
           )
         })}
       </div>
-      {room.status === 'question' && chosen !== null && <p style={styles.muted}>Answer locked in. Waiting for the reveal…</p>}
+      {room.status === 'question' && chosen !== null && <p style={{ ...styles.muted, marginTop: 14 }}>Answer locked in. Waiting for the reveal…</p>}
       {reveal && (
-        <div style={{ marginTop: 16 }}>
+        <div style={{ marginTop: 18 }}>
           {myAnswer
-            ? <p><strong>{myAnswer.correct ? `Correct! +${myAnswer.points}${myAnswer.first ? ' (first to answer correctly!)' : ''}` : 'Not this time.'}</strong></p>
-            : <p><strong>No answer submitted.</strong></p>}
-          <blockquote style={{ borderLeft: '3px solid #4f46e5', margin: 0, paddingLeft: 12 }}>“{plain(reveal.sourceQuote)}”</blockquote>
+            ? <p style={{ fontSize: 20, fontWeight: 900, color: myAnswer.correct ? '#86efac' : '#fca5a5' }}>
+                {myAnswer.correct ? `Correct! +${myAnswer.points}${myAnswer.first ? ' ⚡ first!' : ''}` : 'Not this time.'}
+              </p>
+            : <p style={{ fontSize: 20, fontWeight: 900, color: '#fca5a5' }}>No answer submitted.</p>}
+          <blockquote style={{ borderLeft: `4px solid ${YELLOW}`, margin: 0, padding: '4px 0 4px 14px', fontStyle: 'italic' }}>“{plain(reveal.sourceQuote)}”</blockquote>
           <p style={styles.muted}>{reveal.explanation}</p>
         </div>
       )}
@@ -383,35 +478,19 @@ function Review({ room, answers }: { room: Room; answers: Answer[] }) {
 
   return (
     <div style={styles.card}>
-      <h3 style={{ marginTop: 0 }}>What you missed</h3>
-      {missed.length === 0 && <p>Perfect round. Nothing to review!</p>}
+      <h2 style={styles.h2}>What you missed</h2>
+      {missed.length === 0 && <p style={{ fontSize: 18, fontWeight: 800, color: YELLOW }}>Perfect round. Nothing to review! 🎉</p>}
       {missed.map(({ q, i, reveal, mine }) => (
-        <div key={i} style={{ marginBottom: 16 }}>
+        <div key={i} style={{ marginBottom: 18 }}>
           <strong>{q.question}</strong>
-          <p style={{ margin: '4px 0' }}>
-            Your answer: {mine ? q.choices[mine.choice] : 'none'} · Correct: {reveal ? q.choices[reveal.answerIndex] : '?'}
+          <p style={{ margin: '6px 0' }}>
+            <span style={{ color: '#fca5a5' }}>Your answer: {mine ? q.choices[mine.choice] : 'none'}</span>
+            {' · '}
+            <span style={{ color: '#86efac' }}>Correct: {reveal ? q.choices[reveal.answerIndex] : '?'}</span>
           </p>
-          {reveal && <blockquote style={{ borderLeft: '3px solid #8886', margin: 0, paddingLeft: 12 }}>“{plain(reveal.sourceQuote)}”</blockquote>}
+          {reveal && <blockquote style={{ borderLeft: `4px solid ${YELLOW}`, margin: 0, paddingLeft: 14, fontStyle: 'italic' }}>“{plain(reveal.sourceQuote)}”</blockquote>}
         </div>
       ))}
-    </div>
-  )
-}
-
-
-// Shown when someone opens a room link before the app knows their name.
-function NameGate({ children, onLeave }: { children: import('react').ReactNode; onLeave: () => void }) {
-  const [ready, setReady] = useState(() => readName().trim().length > 0)
-  const [name, setName] = useState('')
-  if (ready) return <>{children}</>
-  return (
-    <div style={styles.card}>
-      <h2 style={{ marginTop: 0 }}>Join this quiz</h2>
-      <label>Your name
-        <input style={styles.input} value={name} onChange={(e) => setName(e.target.value)} placeholder="e.g. Sam" maxLength={24} autoFocus />
-      </label>
-      <button style={styles.button} disabled={!name.trim()} onClick={() => { saveName(name.trim()); setReady(true) }}>Join</button>{' '}
-      <button style={styles.ghost} onClick={onLeave}>Cancel</button>
     </div>
   )
 }
