@@ -86,7 +86,7 @@ export default function Home() {
     <div style={styles.page}>
       <h1 style={{ marginBottom: 0 }}>Cram Room</h1>
       <p style={styles.muted}>Turn any article or notes into a live quiz, with every answer backed by the source.</p>
-      {roomId ? <RoomView code={roomId} onLeave={() => goToRoom('')} /> : <StartScreen onEnter={goToRoom} />}
+      {roomId ? <NameGate onLeave={() => goToRoom('')}><RoomView code={roomId} onLeave={() => goToRoom('')} /></NameGate> : <StartScreen onEnter={goToRoom} />}
     </div>
   )
 }
@@ -397,3 +397,22 @@ function Review({ room, answers }: { room: Room; answers: Answer[] }) {
     </div>
   )
 }
+
+
+// Shown when someone opens a room link before the app knows their name.
+function NameGate({ children, onLeave }: { children: import('react').ReactNode; onLeave: () => void }) {
+  const [ready, setReady] = useState(() => readName().trim().length > 0)
+  const [name, setName] = useState('')
+  if (ready) return <>{children}</>
+  return (
+    <div style={styles.card}>
+      <h2 style={{ marginTop: 0 }}>Join this quiz</h2>
+      <label>Your name
+        <input style={styles.input} value={name} onChange={(e) => setName(e.target.value)} placeholder="e.g. Sam" maxLength={24} autoFocus />
+      </label>
+      <button style={styles.button} disabled={!name.trim()} onClick={() => { saveName(name.trim()); setReady(true) }}>Join</button>{' '}
+      <button style={styles.ghost} onClick={onLeave}>Cancel</button>
+    </div>
+  )
+}
+
