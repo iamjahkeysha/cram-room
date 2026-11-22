@@ -87,7 +87,7 @@ function useRoomParam() {
   const go = (id: string) => {
     const url = new URL(window.location.href)
     if (id) url.searchParams.set('room', id)
-    else url.searchParams.delete('room')
+    else url.searchParams.delete('room'); url.searchParams.delete('join')
     window.history.pushState(null, '', url)
     setRoom(id)
   }
@@ -95,13 +95,13 @@ function useRoomParam() {
 }
 
 export default function Home() {
-  const [roomId, goToRoom] = useRoomParam()
+  const [roomId, goToRoom] = useRoomParam(); const joinMode = new URLSearchParams(window.location.search).has('join')
   return (
     <div style={styles.backdrop}>
       <div style={styles.page}>
         {roomId
           ? <NameGate onLeave={() => goToRoom('')}><RoomView code={roomId} onLeave={() => goToRoom('')} /></NameGate>
-          : <StartScreen onEnter={goToRoom} />}
+          : joinMode ? <JoinTicket onEnter={goToRoom} /> : <StartScreen onEnter={goToRoom} />}
       </div>
     </div>
   )
@@ -495,3 +495,52 @@ function Review({ room, answers }: { room: Room; answers: Answer[] }) {
   )
 }
 
+
+
+// Focused join page (/home?join): just the game code, styled as an admission ticket.
+function JoinTicket({ onEnter }: { onEnter: (id: string) => void }) {
+  const [code, setCode] = useState('')
+  const [busy, setBusy] = useState(false)
+  const [error, setError] = useState<string | null>(null)
+
+  async function join() {
+    setBusy(true); setError(null)
+    const r = await callAction<{ roomId: string }>('joinRoom', { roomId: code, name: readName() })
+    setBusy(false)
+    if (r.ok) onEnter(r.data.roomId)
+    else setError(r.error)
+  }
+
+  // Punches a half-circle notch into each side, like a real ticket stub.
+  const notch = 'radial-gradient(circle 12px at 0 50%, #0000 98%, #000) left / 51% 100% no-repeat, radial-gradient(circle 12px at 100% 50%, #0000 98%, #000) right / 51% 100% no-repeat'
+
+  return (
+    <div style={{ textAlign: 'center', paddingTop: 32 }}>
+      <h1 style={{ ...groovy, fontSize: 'clamp(40px, 9vw, 64px)', lineHeight: 1.05, margin: 0 }}>Got a ticket?</h1>
+      <p style={{ ...styles.muted, fontSize: 16, marginTop: 12 }}>Enter the 6-letter code from your host.</p>
+      <form onSubmit={(e) => { e.preventDefault(); if (code.length === 6 && !busy) join() }}>
+        <div style={{ display: 'inline-block', marginTop: 24, background: YELLOW, color: INK, borderRadius: 18, padding: '18px 36px', WebkitMask: notch, mask: notch }}>
+          <div style={{ fontWeight: 800, letterSpacing: 3, fontSize: 12 }}>ADMIT ONE · GAME CODE</div>
+          <input
+            value={code}
+            onChange={(e) => setCode(e.target.value.toUpperCase().replace(/[^A-Z0-9]/g, '').slice(0, 6))}
+            autoFocus
+            aria-label="Game code"
+            placeholder="······"
+            style={{
+              width: 240, maxWidth: '60vw', marginTop: 6, background: 'transparent', border: 'none',
+              borderBottom: `2px dashed ${INK}66`, color: INK, fontSize: 36, fontWeight: 900, letterSpacing: 10,
+              textAlign: 'center', outline: 'none', fontFamily: 'inherit',
+            }}
+          />
+        </div>
+        <div>
+          <button type="submit" style={styles.button} disabled={busy || code.length < 6}>
+            {busy ? 'Checking…' : 'Join game →'}
+          </button>
+        </div>
+      </form>
+      {error && <p style={styles.error}>{error}</p>}
+    </div>
+  )
+}

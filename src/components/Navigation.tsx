@@ -119,7 +119,7 @@ export default function Navigation() {
 
           {/* Center: logo */}
           <Link
-            to="/home"
+            to="/"
             style={{
               fontFamily: "'Shrikhand', cursive", fontSize: 'clamp(22px, 4vw, 30px)', lineHeight: 1, color: YELLOW,
               textDecoration: 'none', whiteSpace: 'nowrap', textAlign: 'center',
@@ -225,3 +225,4 @@ export default function Navigation() {
     </>
   )
 }
+
