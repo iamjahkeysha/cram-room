@@ -2,6 +2,7 @@
  * Top nav: 70s game-show marquee bar. Keeps the scaffold's sign-in/sign-out wiring
  * and the data-testid hooks the shipped tests rely on.
  * Layout: links on the left, logo centered, live game info + account on the right.
+ * On phones the live chips hide (the question card already shows the big timer).
  */
 import { useState, useEffect } from 'react'
 import type { CSSProperties } from 'react'
@@ -38,8 +39,9 @@ function useGroovyFont() {
   }, [])
 }
 
+// No "display" here on purpose: the cram-sm / cram-wide classes decide when chips show.
 const chip: CSSProperties = {
-  display: 'inline-flex', alignItems: 'center', gap: 6, padding: '5px 12px', borderRadius: 999,
+  alignItems: 'center', gap: 6, padding: '5px 12px', borderRadius: 999,
   background: 'rgba(255,255,255,0.1)', border: '1px solid rgba(255,255,255,0.22)', color: '#fff', fontSize: 13, fontWeight: 700,
   whiteSpace: 'nowrap',
 }
@@ -92,6 +94,9 @@ export default function Navigation() {
         .cram-bulb { width: 8px; height: 8px; border-radius: 50%; background: #fde68a; box-shadow: 0 0 8px ${YELLOW};
           animation: cramBlink var(--blink, 1.2s) infinite; flex: none }
         .cram-bulb:nth-child(odd) { animation-delay: calc(var(--blink, 1.2s) / 2) }
+        .cram-sm, .cram-wide, .cram-chev { display: none }
+        @media (min-width: 640px) { .cram-sm { display: inline-flex } .cram-chev { display: block } }
+        @media (min-width: 1024px) { .cram-wide { display: inline-flex } }
       `}</style>
       <nav
         data-testid="app-navigation"
@@ -117,7 +122,7 @@ export default function Navigation() {
             )}
           </div>
 
-          {/* Center: logo */}
+          {/* Center: logo, links to the landing page */}
           <Link
             to="/"
             style={{
@@ -129,15 +134,15 @@ export default function Navigation() {
             Cram Room
           </Link>
 
-          {/* Right: live game info + account */}
+          {/* Right: live game info (tablet and up) + account */}
           <div style={{ display: 'flex', alignItems: 'center', justifyContent: 'flex-end', gap: 8, minWidth: 0 }}>
             {live && live.phase !== 'done' && (
               <>
-                <span className="hidden lg:inline-flex" style={chip}>
+                <span className="cram-wide" style={chip}>
                   Room <span style={{ color: YELLOW, letterSpacing: 2 }}>{live.code}</span>
                 </span>
                 {live.phase === 'question' && (
-                  <span style={{
+                  <span className="cram-sm" style={{
                     ...chip, border: 'none', fontWeight: 900,
                     background: urgent ? '#e11d48' : YELLOW, color: urgent ? '#fff' : INK,
                     boxShadow: urgent ? '0 0 14px #e11d48' : 'none', transition: 'background 300ms',
@@ -145,7 +150,7 @@ export default function Navigation() {
                     ⏱ {live.secondsLeft}s
                   </span>
                 )}
-                {live.phase === 'reveal' && <span className="hidden sm:inline-flex" style={chip}>Next in {live.secondsLeft}s</span>}
+                {live.phase === 'reveal' && <span className="cram-sm" style={chip}>Next in {live.secondsLeft}s</span>}
               </>
             )}
 
@@ -161,7 +166,7 @@ export default function Navigation() {
                       aria-label="Account menu"
                       className="group"
                       style={{
-                        display: 'flex', alignItems: 'center', gap: 8, borderRadius: 999, padding: '4px 10px 4px 4px', fontSize: 14,
+                        display: 'flex', alignItems: 'center', gap: 6, borderRadius: 999, padding: 4, fontSize: 14,
                         background: 'rgba(255,255,255,0.1)', border: '1px solid rgba(255,255,255,0.25)', color: '#fff', cursor: 'pointer',
                       }}
                     >
@@ -174,7 +179,7 @@ export default function Navigation() {
                       <span data-testid="nav-user-name" className="hidden max-w-[120px] truncate xl:inline">
                         {user.name || user.email}
                       </span>
-                      <ChevronDown className="h-3.5 w-3.5 transition-transform duration-150 group-data-[popup-open]:rotate-180" aria-hidden />
+                      <ChevronDown className="cram-chev h-3.5 w-3.5 transition-transform duration-150 group-data-[popup-open]:rotate-180" style={{ marginRight: 4 }} aria-hidden />
                     </button>
                   }
                 />
@@ -225,4 +230,3 @@ export default function Navigation() {
     </>
   )
 }
-

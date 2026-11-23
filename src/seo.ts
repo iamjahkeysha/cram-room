@@ -1,5 +1,5 @@
-/**
- * Public-page SEO — what search engines, AI answer engines, and link previews
+﻿/**
+ * Public-page SEO â€” what search engines, AI answer engines, and link previews
  * see for this app.
  *
  * Two consumers read this file, so the values can never disagree:
@@ -25,13 +25,14 @@ import { APP_NAME } from './constants'
 declare const __DEEPSPACE_SITE_ORIGIN__: string | undefined
 
 export const seo = {
-  title: APP_NAME,
+  title: ` · Study smarter, together`,
   description: `${APP_NAME} is a real-time collaborative app.`,
-  /** Public origin for canonical URLs, og:url, and the sitemap — no trailing
+  /** Public origin for canonical URLs, og:url, and the sitemap â€” no trailing
    *  slash. Replace with the custom domain once one is attached, e.g.
    *  'https://www.example.com'. */
   origin: typeof __DEEPSPACE_SITE_ORIGIN__ === 'string' ? __DEEPSPACE_SITE_ORIGIN__ : 'http://localhost',
-  /** 1200×630 preview image, root-relative to public/ (e.g. '/og.png'). */
+  /** 1200Ã—630 preview image, root-relative to public/ (e.g. '/og.png'). */
   // ogImage: '/og.png',
   noindex: false,
 }
+
