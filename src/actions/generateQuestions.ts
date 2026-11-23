@@ -107,7 +107,7 @@ function isText(v: unknown): v is string {
   return typeof v === 'string' && v.trim().length > 0
 }
 
-function validate(raw: unknown, source: string): { good: Question[]; dropped: number } {
+export function validate(raw: unknown, source: string): { good: Question[]; dropped: number } {
   const list = (raw as { questions?: unknown })?.questions
   if (!Array.isArray(list)) return { good: [], dropped: 0 }
 
@@ -187,3 +187,4 @@ export const generateQuestions: ActionHandler<Env> = async ({ params, tools }) =
 
   return { success: true, data: { questions: good, dropped, sourceChars: source.length } }
 }
+
