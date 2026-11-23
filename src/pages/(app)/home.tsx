@@ -1,6 +1,6 @@
 ﻿import { useEffect, useMemo, useState } from 'react'
 import type { CSSProperties, ReactNode } from 'react'
-import { getAuthToken, useQuery } from 'deepspace'
+import { AuthOverlay, getAuthToken, useQuery } from 'deepspace'
 import { setLiveStatus } from '../../liveStatus'
 
 const QUESTION_SECONDS = 20
@@ -175,7 +175,7 @@ function StartScreen({ onEnter }: { onEnter: (id: string) => void }) {
         </div>
       </div>
 
-      {error && <p style={styles.error}>{error}</p>}
+      {error && <ErrorNote message={error} />}
 
       <div style={{ display: 'grid', gridTemplateColumns: 'repeat(auto-fit, minmax(180px, 1fr))', gap: 12, marginTop: 20 }}>
         {steps.map((s) => (
@@ -281,7 +281,7 @@ function RoomView({ code, onLeave }: { code: string; onLeave: () => void }) {
   if (joinError) {
     return (
       <div style={styles.card}>
-        <p style={styles.error}>{joinError}</p>
+        <ErrorNote message={joinError} />
         <button style={styles.ghost} onClick={onLeave}>Back</button>
       </div>
     )
@@ -540,7 +540,21 @@ function JoinTicket({ onEnter }: { onEnter: (id: string) => void }) {
           </button>
         </div>
       </form>
-      {error && <p style={styles.error}>{error}</p>}
+      {error && <ErrorNote message={error} />}
+    </div>
+  )
+}
+
+
+// Error text; when the problem is "not signed in", also offers a button that opens sign-in.
+function ErrorNote({ message }: { message: string }) {
+  const [open, setOpen] = useState(false)
+  const needsSignIn = message.startsWith('Please sign in first')
+  return (
+    <div style={{ marginTop: 8 }}>
+      <p style={{ ...styles.error, marginTop: 0 }}>{message}</p>
+      {needsSignIn && <button style={{ ...styles.button, marginTop: 4 }} onClick={() => setOpen(true)}>Sign in</button>}
+      {open && <AuthOverlay onClose={() => setOpen(false)} />}
     </div>
   )
 }
